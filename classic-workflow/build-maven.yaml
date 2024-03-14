@@ -1,0 +1,43 @@
+
+name: Workflow to build Maven Java Project.
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine JDK version
+        run: |
+          if [ -f "pom.xml" ]; then
+
+            JDK_VERSION=$(awk -F'[><]' '/<maven\.compiler\.target>/{print $3; exit}' pom.xml)
+            if [ -n "$JDK_VERSION" ]; then
+                            echo "JDK_VERSION=$JDK_VERSION" >> $GITHUB_ENV
+            else
+                            echo "JDK_VERSION not found in pom.xml, will use the fallback"
+                            echo "JDK_VERSION=11" >> $GITHUB_ENV
+            fi
+          else
+            echo "No build configuration file found"
+            exit 1
+          fi
+
+      - name: Install JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JDK_VERSION }}
+          distribution: 'adopt'
+          check-latest: true
+
+      - name: Build with Maven
+        run: mvn -B verify --file pom.xml
