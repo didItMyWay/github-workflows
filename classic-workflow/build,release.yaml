@@ -1,0 +1,57 @@
+
+name: Workflow to build Maven/Gradle Java Project.
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine Build System
+        id: determine-build-system
+        run: |
+          if [ -f "pom.xml" ]; then
+            echo "Using Maven"
+            echo "::set-output name=build-system::maven"
+
+            JDK_VERSION=$(awk -F'[><]' '/<maven\.compiler\.target>/{print $3; exit}' pom.xml)
+            if [ -n "$JDK_VERSION" ]; then
+                            echo "JDK_VERSION=$JDK_VERSION" >> $GITHUB_ENV
+            else
+                            echo "JDK_VERSION not found in pom.xml"
+            fi
+
+          elif [ -f "build.gradle" ]; then
+            echo "Using Gradle"
+            echo "::set-output name=build-system::gradle"
+          else
+            echo "No build configuration file found"
+            exit 1
+          fi
+
+      - name: Install JDK
+        if: steps.determine-build-system.outputs.build-system == 'maven'
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JDK_VERSION }}
+          distribution: 'adopt'
+          check-latest: true
+
+      - name: Build with Maven
+        if: steps.determine-build-system.outputs.build-system == 'maven'
+        run: mvn -B verify --file pom.xml
+
+      - name: Ensure executable permission for gradlew and build with Gradle
+        if: steps.determine-build-system.outputs.build-system == 'gradle'
+        run: |
+          chmod +x gradlew
+          ./gradlew build
