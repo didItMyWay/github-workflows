@@ -1,0 +1,83 @@
+on:
+    workflow_call:
+        inputs:
+            service_name: 
+                type: string
+                description: Service to deploy as Lambda
+                required: true
+            aws_region:
+                type: string
+                description: AWS region to deploy Lambda to
+                required: true
+            role_arn: 
+                type: string
+                description: Deployment role
+                required: true
+        
+  
+jobs:
+    build:
+        name: Build application
+        runs-on: ubuntu-latest 
+        permissions:
+            id-token: write
+            contents: read
+        defaults:
+            run:
+                shell: bash
+                working-directory: ./${{ inputs.service_name }} 
+        
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+            
+            - name: Setup Python
+              uses: actions/setup-python@v5
+              with:
+                python-version: 3.9
+            
+            - name: Install Dependencies
+              run: |
+                python -m pip install --upgrade pip
+                pip install -r requirements.txt
+            
+            - name: Execute Tests
+              run: |
+                python3 -m pytest tests/
+            
+
+    deploy:
+        needs: build
+        name: Deploy Lambda function
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                shell: bash
+                working-directory: ./${{ inputs.service_name }}
+
+        steps:
+
+            - name: Assume Deployment role
+              uses: aws-actions/configure-aws-credentials@v4
+              with:
+                aws-region: ${{ inputs.aws_region }}
+                role-to-assume: ${{ inputs.role_arn }}
+
+            - name: Setup Node JS 14
+              uses: actions/setup-node@v4
+              with:
+                node-version: 14
+            
+            - name: Install Serverless Plugins
+              uses: serverless/github-action@v3.2
+              with:
+                args: >
+                    -c "serverless plugin install --n serverless-python-requirements -c ./${{ inputs.service_name }}/serverless.yaml -v"
+                entrypoint: /bin/sh
+            
+            - name: Serverless Deploy
+              uses: serverless/github-action@v3.2
+              with:
+                args: >
+                    -c "serverless deploy -c ./${{ inputs.service_name }}/serverless.yaml -v"
+                entrypoint: /bin/sh    

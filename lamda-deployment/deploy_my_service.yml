@@ -1,0 +1,25 @@
+name: 'Deploy My Service'
+
+on:
+    workflow_dispatch:
+    push:
+        branches:
+        - main
+        paths:
+        - '/my-service/**'
+    pull_request:
+            branches:
+            - main
+            paths:
+            - 'my-service/**'
+
+jobs:
+    build:
+        permissions:
+            id-token: write
+            contents: read
+        name: Build and Deploy Service
+        uses: "./.github/workflows/build-deploy-lambda-template.yml"
+        with:
+            "service_name": "my-service"
+            "role_arn": "my_aws_iam_role"
